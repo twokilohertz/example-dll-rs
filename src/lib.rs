@@ -14,8 +14,8 @@ pub extern "system" fn DllMain(
     fdw_reason: u32,
     _lpv_reserved: *mut std::ffi::c_void,
 ) -> BOOL {
-    // DLL_THREAD_... notifications are not needed for this simple example
     unsafe {
+        // DLL_THREAD_... notifications are not needed for this simple example
         if !DisableThreadLibraryCalls(hinst_dll).as_bool() {
             return false.into();
         }
@@ -26,6 +26,11 @@ pub extern "system" fn DllMain(
             // Show our little demo message box
             show_message_box();
 
+            unsafe {
+                FreeLibraryAndExitThread(hinst_dll, 0);
+            }
+
+            // We won't ever reach this
             return true.into();
         }
         DLL_PROCESS_DETACH => {
