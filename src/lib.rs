@@ -3,7 +3,11 @@ use windows::{
     w,
     Win32::Foundation::*,
     Win32::{
-        System::{LibraryLoader::*, SystemServices::*},
+        System::{
+            LibraryLoader::*,
+            SystemServices::*,
+            Threading::{CreateThread, THREAD_CREATION_FLAGS},
+        },
         UI::WindowsAndMessaging::*,
     },
 };
@@ -15,6 +19,10 @@ pub extern "system" fn DllMain(
     _lpv_reserved: *mut std::ffi::c_void,
 ) -> BOOL {
     unsafe {
+        OUR_HINST = hinst_dll;
+    }
+
+    unsafe {
         // DLL_THREAD_... notifications are not needed for this simple example
         if !DisableThreadLibraryCalls(hinst_dll).as_bool() {
             return false.into();
@@ -24,13 +32,24 @@ pub extern "system" fn DllMain(
     match fdw_reason {
         DLL_PROCESS_ATTACH => {
             // Show our little demo message box
-            show_message_box();
-
             unsafe {
-                FreeLibraryAndExitThread(hinst_dll, 0);
+                let thread_start_address = std::mem::transmute::<
+                    extern "system" fn() -> u32,
+                    unsafe extern "system" fn(*mut std::ffi::c_void) -> u32,
+                >(show_message_box);
+                match CreateThread(
+                    None,
+                    0,
+                    Some(thread_start_address),
+                    None,
+                    THREAD_CREATION_FLAGS(0),
+                    None,
+                ) {
+                    Ok(_) => (),
+                    Err(_) => return false.into(),
+                }
             }
 
-            // We won't ever reach this
             return true.into();
         }
         DLL_PROCESS_DETACH => {
@@ -43,7 +62,9 @@ pub extern "system" fn DllMain(
     FALSE
 }
 
-fn show_message_box() {
+static mut OUR_HINST: HMODULE = HMODULE(INVALID_HANDLE_VALUE.0);
+
+extern "system" fn show_message_box() -> u32 {
     unsafe {
         MessageBoxW(
             None,
@@ -51,5 +72,9 @@ fn show_message_box() {
             w!("A message from example-dll-rs"),
             MESSAGEBOX_STYLE(0u32),
         );
+    }
+
+    unsafe {
+        FreeLibraryAndExitThread(OUR_HINST, 0);
     }
 }
